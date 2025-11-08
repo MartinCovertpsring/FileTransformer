@@ -1,0 +1,7 @@
+#TO-DO
+
+1. Create an identifier so that if a file has been processed, it doesn't get processed again. The easy solution would be to store the processed files in a diferent directory, but for the purposes of the current system config, we want an identifier on the file (different form the file path) that marks it when it has been processed
+
+2. Amplify the FileProcessor class
+
+3. 

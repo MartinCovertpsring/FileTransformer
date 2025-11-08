@@ -1,2 +1,17 @@
-# FileTransformer
-File Transformer in Python
+# FileTransformer.py
+
+Hi! This is my first Python app I build for a real production line case. The idea came from a real scenareo where I was working on a system integration between an e-commerce platforma and an ERP. The data had to be sent in a .csv from one server where the data was received in .XML and had to be sent to the server where the ERP was hosted in .CSV. 
+
+The integration workflow was already set up when I started working on it, and the system used a third party app to do the retreival and transformation of the original .XML orders into a .CVS that the ERP could handle. However, the system barely worked and needed some major reworkd, and the person who set up the workflow was unavailable at the time. So, instead of sitting around, I started working on a simple Python script that could retreive the .CSV files that were outputted by the previous workflow and modify them before sending them to the ERP Server. 
+
+Originally, this was supposed to be a very simple, single-purpose script, only intended to make simple .CSV manipulation on a WindowsSever directory (add a column, modify some values, setting up the encoding, etc). I quickly realized, however, that this could grow into my own little project. There are of course available tools to do this (for exemple, the .XML to .CSV step was done with Mirth), but I wanted to have complete control of the process and also choose the scope of it (I needed something simple enough to get up and running without having to navigate through all the options of third-party app). 
+
+# First steps: Modularity
+Then came the realization that, instead of just working on .CSV files (all that I needed at the time), I could grow this script to become a project for a small and simple app development. This meant thinking long-term for other case scenareos and also planning the modularity of the classes and methods I was building. Instead of hard coding my needs at the time (process only .csv files that start with "xxxxx" and only do this or that transformation...), I had to start developping a robust architecture that could allow me to expand the capabilities of my app. 
+
+The first and easiest challenge was how to monitor the folder and trigger specific actions once the files where uploaded. I quickly found the Watchdog library, but most of the documentation was oriented for a simple monitoring cases where a user is notified of any change in a directory, not to implement a channel workflow. Despite this, figuring out how the Observer/EventHanddler logic could be applied to my needs was a peace of cake. 
+
+# First challenge: Logs 
+If I was to build an app that would opperate on a real production environment, I needed to make sure nothing would go wrong and no data would be lost. First of all, I needed a backup system to store all incoming .CSV orders in case my app failed. Building the module to create a backup directory and store a copy of all files was easy, but what about a log system? At first I thought to initialize a list and simply store all the info/error messages as strings and, once the program stopped, save the list into a .txt file. Oh if only it were that easy! But of cours this wasn't practical nor scalable. 
+
+I went and found the logging module for Python. How convienient, just set your basic parametters and your ready, right? Not quite. I didn't want to have one single log for each time the program was run but rahter a log file for each iteration. The reason: if 

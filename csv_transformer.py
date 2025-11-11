@@ -1,5 +1,3 @@
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, LoggingEventHandler
 import datetime
 import csv
 import os
@@ -7,16 +5,22 @@ import time
 import chardet
 import shutil
 import logging
+import pandas
+import tkinter as tk
+from tkinter import filedialog
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler, LoggingEventHandler
+
 
 
 # ==============================
 # TO-DO
 # ==============================
 # 1. Fix log transfer file (duplicated logs when created)
-# 2. Divide createBakup method into two methods: createCopy and move_file
+# 2.
 # 3. Create more log messages
-# 4. REWRITE process_file METHOD
-# 5. Transfer file methods to FileProcessor, leave EventHandler only for events on directories
+# 4.
+# 5.
 # 6. Event methods should have (self, event, action) where action is a FileProcessor method
 # 7. create_backupFile is redundant: copy + move methods
 # 8. If a file is replaced, it doesn't get processed again. Not a real case use for now but should be addressed latter on. 
@@ -34,8 +38,9 @@ CSV_EXTENSION = ".csv"           # File type to monitor
 EXTENSION_LOG = ".log"           # File type to monitor
 DIRECTORY_BACKUP = "backup"      # Directory name for file backup
 DIRECTORY_LOG = "logs"           # Directory name for file backup
+DELIMITER = ";"
+ENCODING = "utf-8"
 # ==============================
-
 
 class File:
     def __init__(self, path):
@@ -59,11 +64,130 @@ class File:
         return os.path.dirname(self._path)
     
     @property
-    def is_cvs(self):
+    def is_csv(self):
         return self.type == CSV_EXTENSION
     
     def __str__(self):
         return f"File(name='{self.name}', type='{self.type}', path='{self.path}')"
+    
+    def read_file(self): 
+        content = ""
+        try:
+            with open(self.path, 'r', newline='') as infile:
+                return infile.read()
+        except Exception as e:
+            print(f"Error reading file: {e}")
+        return content
+
+class CSV(File):
+    
+    def __init__(self, path):
+        super().__init__(path)  
+
+    def get_encoding(self):
+        try:
+            with open(self.path, 'rb') as f:
+                result = chardet.detect(f.read())
+            return result['encoding']
+        except Exception as e:
+            print(f"Error encoding {self.name}: {e}")
+
+    def read_csv(self):
+        content = self.read_file()
+        rows = csv.reader(content.splitlines(), delimiter= self.get_delimiter())
+        return list(rows)
+
+    def get_delimiter(self):
+        try:
+            sample = self.read_file()[:1024] 
+            sniffer = csv.Sniffer()  
+            delimiter = sniffer.sniff(sample).delimiter
+            return delimiter
+        except Exception as e:
+            print(f"Error detecting delimiter: {e}")
+            return ';'  
+
+    def column(self, position: int):
+        try:
+            column = []
+            rows = self.read_csv()
+            for row in rows:
+                column.append(row[position])
+            return column
+        except IndexError:
+            print(f"Error: Column position {position} is out of bounds")
+            return 
+        except Exception as e:
+            print(f"Error processing file: {e}")
+            return 
+
+    def header(self):
+        position = 0
+        try:
+            data = self.read_csv()[position]
+            return data
+        except IndexError:
+            print(f"Error: Column position {position} is out of bounds")
+            return 
+        except Exception as e:
+            print(f"Error processing file: {e}")
+            return 
+
+    def row(self, position):
+        try:
+            data = self.read_csv()[position]
+            return data
+        except IndexError:
+            print(f"Error: Row position {position} is out of bounds")
+            pass 
+        except Exception as e:
+            print(f"Error processing file: {e}")
+            pass 
+    
+    def get_value(self, row_index: int, position: int):
+        try:
+            row_data = self.row(row_index)
+            if row_data is None:
+                return 
+            return row_data[position]
+        except IndexError:
+            print(f"Error: Position {position} is out of bounds in row {row_index}")
+            pass
+        except Exception as e:
+            print(f"Error getting value: {e}")
+            pass 
+    
+    def set_value(self, value, row, position):
+        return
+
+    def add_column(self, position):
+        value = VALUE
+        try:
+            rows = self.read_csv()
+            delimiter = self.get_delimiter()
+            # Insert the new column at the given position
+            for row in rows:
+                if position < 0 or position > len(row):
+                    row.append(value)
+                else:
+                    row.insert(position, value)
+            # Write back to the same file safely
+            with open(self.path, 'w', newline='', encoding=ENCODING) as outfile:
+                writer = csv.writer(outfile, delimiter=delimiter)
+                writer.writerows(rows)
+            return 
+        except Exception as e:
+            print(f"Error adding column: {e}")
+            return 
+
+    def del_column(self, position):
+        return
+    
+    def add_row(self, position):
+        return
+    
+    def del_row(self, position):
+        return
 
 class Logger:
     
@@ -128,7 +252,7 @@ class FileProcessor:
         try:
             if not os.path.exists(folder_path):
                 os.mkdir(folder_path)
-        except FileExistsError:
+        except FileExistsError: #DirExistsError??
             return
         except PermissionError:
             return
@@ -173,15 +297,14 @@ class FileProcessor:
         logger = Logger()  # Get the singleton instance
         for filename in os.listdir(directory):
             file_path = os.path.join(directory, filename)
-            if(os.path.isfile(file_path)):
-                file = File(file_path)
+            if(os.path.isfile(file_path)) and file_path.endswith(CSV_EXTENSION):
+                file = CSV(file_path)
                 if (
-                    file.type == file_extension
-                    and file.name.lower().startswith(FILENAME_PREFIX)
+                    file.name.lower().startswith(FILENAME_PREFIX)
                 ):
                     logger.info(f"Existing file processed: {file_path}")
                     print(f"Existing file found: {file_path}")
-                    FileProcessor.add_column(file, POSITION, VALUE)
+                    file.add_column(POSITION)
 
     @staticmethod
     def backup_files(directory, file_extension):
@@ -196,58 +319,24 @@ class FileProcessor:
                     FileProcessor.copy_file(file_path, (os.path.join(directory, "backup")))
                     logger.info(f"Existing file saved in: {file_path}")
 
-
-    def add_column(file, position, value):
-        logger = Logger()  # Get the singleton instance
-        time.sleep(1)  # Wait for file to finish writing
-        try:
-                # Read all data first
-            with open(file.path, 'r', newline='', encoding='utf-8') as infile:
-                reader = csv.reader(infile, delimiter=";")
-                data = list(reader)
-
-            # Write modified data back
-            with open(file.path, 'w', newline='', encoding='utf-8') as outfile:
-                writer = csv.writer(outfile, delimiter=";")
-
-                # Modify header
-                header = data[0]
-                header.insert(position, value)
-                writer.writerow(header)
-
-                # Modify and write each data row
-                for row in data[1:]:
-                    row.insert(position, value)
-                    writer.writerow(row)
-
-            with open(file.path, 'rb') as f:
-                data = f.read()
-                # Step 3: Detect Encoding using chardet Library
-                encoding_result = chardet.detect(data)
-                # Step 4: Retrieve Encoding Information
-                encoding = encoding_result['encoding']
-                # Step 5: Print Detected Encoding Information
-            logger.info(f"File processed: {file.path}, encoded in {encoding}")
-            print(f"File processed: {file.path}")
-            print("Press Ctrl + C to stop")
-        except Exception as e:
-            print(f"Error processing file: {e}")
-
-
 class MyEventHandler(FileSystemEventHandler):
 
     def __init__(self, logger):
         self.logger = logger
 
     def on_created(self, event):
-        if not event.is_directory:
-            file = File(event.src_path)
-            if file.is_cvs:
-                FileProcessor.copy_file(file.path, (os.path.join(WATCH_DIRECTORY, "backup")) )
-                self.logger.info(f"New file detected: {file.path}")
-                print(f"New file detected: {file.path}")
-            if file.is_cvs and file.name.startswith(FILENAME_PREFIX):
-                FileProcessor.add_column(file, POSITION, VALUE)
+        if event.is_directory:
+            return
+        file = File(event.src_path)
+        if not file.is_csv:
+            return
+        csv_file = CSV(event.src_path)
+        FileProcessor.copy_file(csv_file.path, (os.path.join(WATCH_DIRECTORY, "backup")) ) #This needs cleaning
+        self.logger.info(f"New file detected: {file.path}")
+        print(f"New file detected: {file.path}")
+        if file.name.startswith(FILENAME_PREFIX):
+            csv_file.add_column(POSITION)
+
 
 
 # ==============================
@@ -256,13 +345,14 @@ class MyEventHandler(FileSystemEventHandler):
 
 
 print(r"""
-                      _____                                       
-                     | ___ \                                      
-      ___ _____   __ | |_/ / __ ___   ___ ___  ___ ___  ___  _ __ 
-     / __/ __\ \ / / |  __/ '__/ _ \ / __/ _ \/ __/ __|/ _ \| '__|
-    | (__\__ \\ V /  | |  | | | (_) | (_|  __/\__ \__ \ (_) | |   
-     \___|___/ \_/   \_|  |_|  \___/ \___\___||___/___/\___/|_|   
-                                                                 
+'    ______ _ _        _____      _                       _             
+'    |  ___(_) |      |_   _|    | |                     | |            
+'    | |_   _| | ___    | | _ __ | |_ ___  __ _ _ __ __ _| |_ ___  _ __ 
+'    |  _| | | |/ _ \   | || '_ \| __/ _ \/ _` | '__/ _` | __/ _ \| '__|
+'    | |   | | |  __/  _| || | | | ||  __/ (_| | | | (_| | || (_) | |   
+'    \_|   |_|_|\___|  \___/_| |_|\__\___|\__, |_|  \__,_|\__\___/|_|   
+'                                          __/ |                        
+'                                         |___/                         
 """)
 
 log_handler = Logger()
